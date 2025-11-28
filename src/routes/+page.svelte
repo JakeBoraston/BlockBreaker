@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { Ball, Block, Particle, Star, NebulaCloud } from '$lib/types';
+	import type { Ball, Block, Particle, Star, NebulaCloud, Vector2D } from '$lib/types';
 	import { updatePhysics } from '$lib/physics';
 	import { checkBoundaryCollision, checkCircleRectCollision } from '$lib/collisions';
 	import { createParticles, updateParticles } from '$lib/particles';
@@ -18,13 +18,15 @@
 	let height = $derived(viewportHeight - GAME_CONFIG.canvas.marginVertical);
 
 	// Game entities
-	let ball:Ball = $state({
+	let ball: Ball = $state({
 		size: GAME_CONFIG.ball.size,
 		velocity: { ...GAME_CONFIG.ball.initialVelocity },
 		position: { ...GAME_CONFIG.ball.initialPosition },
 		acceleration: { x: 0, y: 0.2 },
 		restitution: GAME_CONFIG.ball.restitution
 	});
+	let ballHistory: Vector2D[] = $state([]);
+	const MAX_HISTORY = 20;
 	let blocks = $state([]);
 	// Game state for UI
 	let mouse = $state({ x: 0, y: 0 });
@@ -191,6 +193,29 @@
 		ctx.fillStyle = bgGradient;
 		ctx.fillRect(0, 0, width, height);
 
+		// Draw nebula clouds FIRST (behind stars)
+		nebulaClouds.forEach((cloud) => {
+			const nebulaGradient = ctx.createRadialGradient(
+				cloud.x,
+				cloud.y,
+				0,
+				cloud.x,
+				cloud.y,
+				cloud.size
+			);
+			nebulaGradient.addColorStop(
+				0,
+				`${cloud.color}${Math.floor(cloud.opacity * 255)
+					.toString(16)
+					.padStart(2, '0')}`
+			);
+			nebulaGradient.addColorStop(0.5, `${cloud.color}33`);
+			nebulaGradient.addColorStop(1, 'transparent');
+
+			ctx.fillStyle = nebulaGradient;
+			ctx.fillRect(cloud.x - cloud.size, cloud.y - cloud.size, cloud.size * 2, cloud.size * 2);
+		});
+
 		// Draw simple stars without shadows for performance
 		stars.forEach((star) => {
 			ctx.globalAlpha = star.currentBrightness;
@@ -205,10 +230,6 @@
 	}
 
 	function softReset() {
-		console.log('softReset called - BEFORE changes');
-		console.log('gameOver before:', gameOver);
-		console.log('gameStarted before:', gameStarted);
-
 		// Reset ball position and velocity FIRST
 		ball.position.x = GAME_CONFIG.ball.initialPosition.x;
 		ball.position.y = GAME_CONFIG.ball.initialPosition.y;
@@ -217,22 +238,18 @@
 
 		// Clear particles to prevent any lingering effects
 		particles = [];
-
+		ballHistory = [];
 		// THEN reset game state flags
 		gameOver = false;
 		gameStarted = false;
 		// Reset blocks
 		blocks = [];
 		initialiseBlocks();
-		console.log('gameOver after:', gameOver);
-		console.log('gameStarted after:', gameStarted);
-		console.log('softReset complete - AFTER changes');
 	}
 
 	$inspect(ball);
 
 	onMount(() => {
-		
 		viewportWidth = window.innerWidth;
 		viewportHeight = window.innerHeight;
 		ctx = canvas.getContext('2d');
@@ -261,37 +278,25 @@
 		}
 
 		function drawBallTrail() {
-			// Create a dramatic glowing trail effect
-			const trailLength = 20;
-			const currentX = ball.position.x;
-			const currentY = ball.position.y;
+			if (ballHistory.length < 2) return;
 
-			for (let i = 0; i < trailLength; i++) {
-				const progress = i / trailLength;
-				const alpha = (1 - progress) * 0.5;
-				const trailX = currentX - ball.velocity.x * i * 0.8;
-				const trailY = currentY - ball.velocity.y * i * 0.8;
-				const trailSize = ball.size * (1 - progress * 0.8);
+			for (let i = 0; i < ballHistory.length - 1; i++) {
+				const progress = i / ballHistory.length;
+				const alpha = progress * 0.7;
 
+				// Draw line segment connecting positions
 				ctx.save();
 				ctx.globalAlpha = alpha;
+				ctx.strokeStyle = '#ff6b6b';
+				ctx.lineWidth = ball.size * (0.3 + progress * 0.7) * 2;
+				ctx.lineCap = 'round';
+				ctx.shadowColor = '#ff3838';
+				ctx.shadowBlur = 15 * progress;
 
-				// Multiple glow layers for more dramatic effect
-				for (let glow = 0; glow < 3; glow++) {
-					const glowAlpha = alpha / (glow + 1);
-					const glowSize = trailSize * (1 + glow * 0.5);
-					const glowBlur = 15 + glow * 10;
-
-					ctx.globalAlpha = glowAlpha;
-					ctx.shadowColor = '#ff3838';
-					ctx.shadowBlur = glowBlur;
-					ctx.fillStyle = glow === 0 ? '#ff6b6b' : 'transparent';
-
-					ctx.beginPath();
-					ctx.arc(trailX, trailY, glowSize, 0, Math.PI * 2);
-					ctx.fill();
-				}
-
+				ctx.beginPath();
+				ctx.moveTo(ballHistory[i].x, ballHistory[i].y);
+				ctx.lineTo(ballHistory[i + 1].x, ballHistory[i + 1].y);
+				ctx.stroke();
 				ctx.restore();
 			}
 		}
@@ -520,6 +525,12 @@
 		function update() {
 			updatePhysics(ball);
 			particles = updateParticles(particles);
+			//Ball Trail updates
+			ballHistory.push({ x: ball.position.x, y: ball.position.y });
+			if (ballHistory.length > MAX_HISTORY) {
+				ballHistory.shift();
+			}
+			//
 			checkBlockCollision();
 			checkPaddle();
 			checkBounds();
@@ -706,15 +717,6 @@
 		opacity: 0.8;
 	}
 
-	.restart-hint {
-		font-size: 1rem !important;
-		opacity: 0.7;
-		margin-top: 1rem;
-		animation: pulse 2s ease-in-out infinite;
-		text-align: center;
-		width: 100%;
-		display: block;
-	}
 
 	@keyframes pulse {
 		0% {
