@@ -31,6 +31,6 @@ canvas {
 	display: block;
 	background: #111;
 	cursor: none;
-	height: 100%;
-	width: 100%;
+	height: 90svh;
+	width: 90svw;
 }

@@ -7,8 +7,8 @@
 	import { GAME_CONFIG } from '$lib/constants';
 	import GameWon from '$lib/components/GameWon.svelte';
 	import GameOver from '$lib/components/GameOver.svelte';
-	let viewportWidth = $state(867);
-	let viewportHeight = $state(800);
+	let viewportWidth = $state(200);
+	let viewportHeight = $state(500);
 
 	let canvas;
 	let ctx;
@@ -246,8 +246,6 @@
 		blocks = [];
 		initialiseBlocks();
 	}
-
-	$inspect(ball);
 
 	onMount(() => {
 		viewportWidth = window.innerWidth;
