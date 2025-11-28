@@ -1,48 +1,55 @@
-<script>
+<script lang="ts">;
 	import { onMount } from 'svelte';
+	let viewportWidth = $state(0);
+	let viewportHeight = $state(0);
+	const initialMinBallSpeed = 0;
+	const initialMaxBallSpeed = 7;
 
 	// Constants
-	const GAME_CONFIG = {
+	const GAME_CONFIG = $state({
 		ball: {
-			size: 2,
-			initialVelocity: { x: 2, y: 2 },
+			size: 5,
+			initialVelocity: {
+				x: Math.random() * 5,
+				y: 1
+			},
 			initialPosition: { x: 10, y: 10 },
-			restitution: 0.9
+			restitution: 0.8
 		},
 		paddle: {
-			width: 50,
+			width: 100,
 			height: 5,
 			bottomOffset: 15
 		},
 		canvas: {
 			marginHorizontal: 10,
 			marginVertical: 35
+		},
+		block: {
+			height:10,
+			width:30,
+			padding: 4
 		}
-	};
+	});
 
 	let canvas;
 	let ctx;
 	let clientRect = $state();
 
-	let viewportWidth = $state(0);
-	let viewportHeight = $state(0);
 	let width = $derived(viewportWidth - GAME_CONFIG.canvas.marginHorizontal);
 	let height = $derived(viewportHeight - GAME_CONFIG.canvas.marginVertical);
 
-	// Game entities with better organization
+	// Game entities
 	let ball = $state({
 		size: GAME_CONFIG.ball.size,
 		velocity: { ...GAME_CONFIG.ball.initialVelocity },
 		position: { ...GAME_CONFIG.ball.initialPosition },
-		acceleration: { x: 0, y: 0 },
+		acceleration: { x: 0, y: 0.2 },
 		restitution: GAME_CONFIG.ball.restitution
 	});
-
-	let mouse = $state({ x: 0, y: 0 });
-
+	let blocks = $state([]);
 	// Game state for UI
-	let score = $state(0);
-	let lives = $state(3);
+	let mouse = $state({ x: 0, y: 0 });
 	let gameStarted = $state(false);
 	let gameOver = $state(false);
 	let isShaking = $state(false);
@@ -64,6 +71,36 @@
 			};
 		}
 	});
+
+	//block initialisation
+	function initialiseBlocks() {
+		const rows = 15;
+		const cols = 15;
+		const blockWidth = GAME_CONFIG.block.width;
+		const blockHeight = GAME_CONFIG.block.height;
+		const padding = GAME_CONFIG.block.padding;
+		const gridWidth = cols * (blockWidth + padding) - padding;
+		const leftMargin = (width - gridWidth) / 2;
+		const topMargin = 25;
+		//create grid
+		for (let row = 0; row < rows; row++) {
+			for (let col = 0; col < cols; col++) {
+				//get block position
+				const isSpecialBlock = (Math.random() * 100) >= 2
+				const x = leftMargin + col * (blockWidth + padding);
+				const y = topMargin + row * (blockHeight + padding);
+				const block = {
+					position: { x: x, y: y },
+					width: blockWidth,
+					height: blockHeight,
+					isSpecial: isSpecialBlock,
+					color: isSpecialBlock ? '#4422ee': '#ff99dd',
+					alive: true
+				};
+				blocks.push(block);
+			}
+		}
+	}
 
 	function handleMouse(event) {
 		// Update clientRect to get current canvas position
@@ -100,8 +137,8 @@
 				y: y + (Math.random() - 0.5) * 4,
 				vx: (Math.random() - 0.5) * 4,
 				vy: (Math.random() - 0.5) * 4,
-				life: 1.0,
-				decay: Math.random() * 0.02 + 0.01,
+				life: 2.0,
+				decay: Math.random() * 0.05 + 0.01,
 				size: Math.random() * 2 + 1,
 				color: color
 			});
@@ -109,7 +146,7 @@
 	}
 
 	function updateParticles() {
-		particles = particles.filter(particle => {
+		particles = particles.filter((particle) => {
 			particle.x += particle.vx;
 			particle.y += particle.vy;
 			particle.life -= particle.decay;
@@ -120,11 +157,11 @@
 	}
 
 	function drawParticles() {
-		particles.forEach(particle => {
+		particles.forEach((particle) => {
 			ctx.save();
 			ctx.globalAlpha = particle.life;
 			ctx.shadowColor = particle.color;
-			ctx.shadowBlur = 10;
+			ctx.shadowBlur = 50;
 			ctx.fillStyle = particle.color;
 			ctx.beginPath();
 			ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
@@ -165,13 +202,13 @@
 
 	function updateSpaceBackground() {
 		// Update twinkling stars
-		stars.forEach(star => {
+		stars.forEach((star) => {
 			star.twinklePhase += star.twinkleSpeed;
 			star.currentBrightness = star.brightness * (0.5 + 0.5 * Math.sin(star.twinklePhase));
 		});
 
 		// Update drifting nebula clouds
-		nebulaClouds.forEach(cloud => {
+		nebulaClouds.forEach((cloud) => {
 			cloud.x += cloud.drift.x;
 			cloud.y += cloud.drift.y;
 
@@ -185,14 +222,21 @@
 
 	function drawSpaceBackground() {
 		// Simple dark gradient background
-		const bgGradient = ctx.createRadialGradient(width/2, height/2, 0, width/2, height/2, Math.max(width, height));
+		const bgGradient = ctx.createRadialGradient(
+			width / 2,
+			height / 2,
+			0,
+			width / 2,
+			height / 2,
+			Math.max(width, height)
+		);
 		bgGradient.addColorStop(0, '#1a0033');
 		bgGradient.addColorStop(1, '#000000');
 		ctx.fillStyle = bgGradient;
 		ctx.fillRect(0, 0, width, height);
 
 		// Draw simple stars without shadows for performance
-		stars.forEach(star => {
+		stars.forEach((star) => {
 			ctx.globalAlpha = star.currentBrightness;
 			ctx.fillStyle = star.color;
 			ctx.beginPath();
@@ -218,16 +262,27 @@
 		viewportHeight = window.innerHeight;
 		ctx = canvas.getContext('2d');
 		clientRect = canvas.getBoundingClientRect();
-
+		initialiseBlocks();
 		// Initialize space background
 		initializeSpaceBackground();
 
 		function draw() {
 			drawSpaceBackground();
+			drawBlocks();
 			drawBallTrail();
 			drawBall();
 			drawPaddle();
 			drawParticles();
+		}
+		function drawBlocks() {
+			blocks.forEach((block) => {
+				if (block.alive) {
+					ctx.beginPath();
+					ctx.roundRect(block.position.x, block.position.y, block.width, block.height, 1);
+					ctx.fillStyle = block.color;
+					ctx.fill();
+				}
+			});
 		}
 
 		function drawBallTrail() {
@@ -238,9 +293,9 @@
 
 			for (let i = 0; i < trailLength; i++) {
 				const progress = i / trailLength;
-				const alpha = (1 - progress) * 0.7;
-				const trailX = currentX - (ball.velocity.x * i * 0.8);
-				const trailY = currentY - (ball.velocity.y * i * 0.8);
+				const alpha = (1 - progress) * 0.5;
+				const trailX = currentX - ball.velocity.x * i * 0.8;
+				const trailY = currentY - ball.velocity.y * i * 0.8;
 				const trailSize = ball.size * (1 - progress * 0.8);
 
 				ctx.save();
@@ -272,7 +327,14 @@
 			const radius = ball.size;
 
 			// Create glowing ball with gradient
-			const gradient = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.3, 0, x, y, radius * 1.5);
+			const gradient = ctx.createRadialGradient(
+				x - radius * 0.3,
+				y - radius * 0.3,
+				0,
+				x,
+				y,
+				radius * 1.5
+			);
 			gradient.addColorStop(0, '#ff6b6b');
 			gradient.addColorStop(0.3, '#ee5a52');
 			gradient.addColorStop(0.7, '#ff3838');
@@ -302,7 +364,14 @@
 			}
 
 			// Inner highlight (main)
-			const highlight = ctx.createRadialGradient(x - radius * 0.4, y - radius * 0.4, 0, x - radius * 0.4, y - radius * 0.4, radius * 0.6);
+			const highlight = ctx.createRadialGradient(
+				x - radius * 0.4,
+				y - radius * 0.4,
+				0,
+				x - radius * 0.4,
+				y - radius * 0.4,
+				radius * 0.6
+			);
 			highlight.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
 			highlight.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
@@ -384,12 +453,22 @@
 			// Horizontal collision
 			const horizontal = checkBoundaryCollision(ball.position.x, ball.size, 0, width);
 			if (horizontal.hitMin) {
-				const result = handleWallCollision(ball.position.x, ball.size, horizontal.minBoundary, ball.velocity.x);
+				const result = handleWallCollision(
+					ball.position.x,
+					ball.size,
+					horizontal.minBoundary,
+					ball.velocity.x
+				);
 				ball.velocity.x = result.velocity;
 				ball.position.x = result.position;
 			}
 			if (horizontal.hitMax) {
-				const result = handleWallCollision(ball.position.x, ball.size, horizontal.maxBoundary, ball.velocity.x);
+				const result = handleWallCollision(
+					ball.position.x,
+					ball.size,
+					horizontal.maxBoundary,
+					ball.velocity.x
+				);
 				ball.velocity.x = result.velocity;
 				ball.position.x = result.position;
 			}
@@ -397,7 +476,12 @@
 			// Vertical collision
 			const vertical = checkBoundaryCollision(ball.position.y, ball.size, 0, height);
 			if (vertical.hitMin) {
-				const result = handleWallCollision(ball.position.y, ball.size, vertical.minBoundary, ball.velocity.y);
+				const result = handleWallCollision(
+					ball.position.y,
+					ball.size,
+					vertical.minBoundary,
+					ball.velocity.y
+				);
 				ball.velocity.y = result.velocity;
 				ball.position.y = result.position;
 			}
@@ -418,10 +502,9 @@
 			const horizontalContact = ballRight >= paddlePos.x && ballLeft <= paddlePos.x + paddle.width;
 
 			if (verticalContact && horizontalContact) {
-				ball.velocity.y = -ball.velocity.y * ball.restitution;
+				ball.velocity.y = -ball.velocity.y;
 				const boundary = paddlePos.y - ball.size;
 				ball.position.y = 2 * boundary - ball.position.y;
-				score += 10;
 				triggerScreenShake();
 				createParticles(ball.position.x, paddlePos.y, '#4ecdc4', 12);
 			}
@@ -437,12 +520,43 @@
 			ball.position.y += ball.velocity.y;
 		}
 
+		function checkBlockCollision() {
+			blocks.forEach((block) => {
+				if (block.alive) {
+					//find closest point
+					const closestX = Math.max(
+						block.position.x,
+						Math.min(ball.position.x, block.position.x + block.width)
+					);
+					const closestY = Math.max(
+						block.position.y,
+						Math.min(ball.position.y, block.position.y + block.height)
+					);
+					const distanceX = ball.position.x - closestX;
+					const distanceY = ball.position.y - closestY;
+					const distanceSquared = distanceX * distanceX + distanceY * distanceY;
+
+					if (distanceSquared < ball.size * ball.size) {
+						if (Math.abs(distanceX) > Math.abs(distanceY)) {
+							ball.velocity.x = -ball.velocity.x;
+						} else {
+							ball.velocity.y = -ball.velocity.y;
+						}
+						block.alive = false;
+						triggerScreenShake();
+						createParticles(closestX,closestY,block.color,5);
+					}
+				}
+			});
+		}
+
 		function update() {
 			updatePhysics();
 			updateParticles();
-			updateSpaceBackground();
+			checkBlockCollision();
 			checkPaddle();
 			checkBounds();
+			updateSpaceBackground();
 		}
 
 		function animate() {
@@ -472,34 +586,34 @@
 
 <div class="game-container" class:shake={isShaking}>
 	<div class="background-glow"></div>
-	<canvas onmousemove={handleMouse} bind:this={canvas} {width} {height} class="game-canvas"></canvas>
-
-	<!-- UI Overlays -->
-	<div class="game-ui">
-		<div class="score-display">Score: {score}</div>
-		<div class="lives-display">Lives: {lives}</div>
-	</div>
+	<canvas onmousemove={handleMouse} bind:this={canvas} {width} {height} class="game-canvas"
+	></canvas>
 
 	{#if !gameStarted}
-		<button class="start-screen" onclick={() => { gameStarted = true; }}>
+		<button
+			class="start-screen"
+			onclick={() => {
+				gameStarted = true;
+			}}
+		>
 			<h1>Block Breaker</h1>
-			<p>Click to start</p>
+			<p>Move to start</p>
 		</button>
 	{/if}
 
 	{#if gameOver}
-		<button class="game-over" onclick={() => {
-			gameOver = false;
-			gameStarted = false;
-			score = 0;
-			lives = 3;
-			ball.position.x = GAME_CONFIG.ball.initialPosition.x;
-			ball.position.y = GAME_CONFIG.ball.initialPosition.y;
-			ball.velocity.x = GAME_CONFIG.ball.initialVelocity.x;
-			ball.velocity.y = GAME_CONFIG.ball.initialVelocity.y;
-		}}>
+		<button
+			class="game-over"
+			onclick={() => {
+				gameOver = false;
+				gameStarted = false;
+				ball.position.x = GAME_CONFIG.ball.initialPosition.x;
+				ball.position.y = Math.random() * 500;
+				ball.velocity.x = GAME_CONFIG.ball.initialVelocity.x;
+				ball.velocity.y = GAME_CONFIG.ball.initialVelocity.y;
+			}}
+		>
 			<h1>Game Over</h1>
-			<p>Final Score: {score}</p>
 			<p class="restart-hint">Click to restart</p>
 		</button>
 	{/if}
@@ -530,8 +644,12 @@
 	}
 
 	@keyframes float {
-		0% { transform: rotate(0deg) scale(1); }
-		100% { transform: rotate(360deg) scale(1.1); }
+		0% {
+			transform: rotate(0deg) scale(1);
+		}
+		100% {
+			transform: rotate(360deg) scale(1.1);
+		}
 	}
 
 	/* Canvas with Filters and Effects */
@@ -541,12 +659,11 @@
 		top: 50%;
 		left: 50%;
 		transform: translate(-50%, -50%);
-		filter: brightness(1.1) contrast(1.2) saturate(1.3);
+		filter: brightness(1.2) contrast(1.2) saturate(1.3);
 		box-shadow:
 			0 0 50px rgba(255, 255, 255, 0.1),
 			inset 0 0 20px rgba(0, 0, 0, 0.2);
-		border: 2px solid rgba(255, 255, 255, 0.1);
-		border-radius: 8px;
+		border-radius: 4px;
 		cursor: none;
 		transition: all 0.3s ease;
 	}
@@ -560,45 +677,41 @@
 
 	/* Screen Shake Animation */
 	@keyframes shake {
-		0%, 100% { transform: translateX(0) translateY(0); }
-		10% { transform: translateX(-2px) translateY(-1px); }
-		20% { transform: translateX(2px) translateY(1px); }
-		30% { transform: translateX(-3px) translateY(-2px); }
-		40% { transform: translateX(3px) translateY(2px); }
-		50% { transform: translateX(-2px) translateY(-1px); }
-		60% { transform: translateX(2px) translateY(1px); }
-		70% { transform: translateX(-1px) translateY(-2px); }
-		80% { transform: translateX(1px) translateY(2px); }
-		90% { transform: translateX(-1px) translateY(-1px); }
+		0%,
+		100% {
+			transform: translateX(0) translateY(0);
+		}
+		10% {
+			transform: translateX(-2px) translateY(-1px);
+		}
+		20% {
+			transform: translateX(2px) translateY(1px);
+		}
+		30% {
+			transform: translateX(-3px) translateY(-2px);
+		}
+		40% {
+			transform: translateX(3px) translateY(2px);
+		}
+		50% {
+			transform: translateX(-2px) translateY(-1px);
+		}
+		60% {
+			transform: translateX(2px) translateY(1px);
+		}
+		70% {
+			transform: translateX(-1px) translateY(-2px);
+		}
+		80% {
+			transform: translateX(1px) translateY(2px);
+		}
+		90% {
+			transform: translateX(-1px) translateY(-1px);
+		}
 	}
 
 	.shake {
 		animation: shake 0.2s ease-in-out;
-	}
-
-	/* Game UI Overlays */
-	.game-ui {
-		position: absolute;
-		top: 20px;
-		left: 20px;
-		right: 20px;
-		display: flex;
-		justify-content: space-between;
-		pointer-events: none;
-		z-index: 10;
-	}
-
-	.score-display, .lives-display {
-		font-family: 'Courier New', monospace;
-		font-size: 18px;
-		font-weight: bold;
-		color: #fff;
-		background: rgba(0, 0, 0, 0.7);
-		padding: 8px 16px;
-		border-radius: 20px;
-		border: 1px solid rgba(255, 255, 255, 0.2);
-		text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
-		backdrop-filter: blur(10px);
 	}
 
 	/* Start Screen */
@@ -685,23 +798,19 @@
 	}
 
 	@keyframes pulse {
-		0% { opacity: 0.7; }
-		100% { opacity: 1; }
+		0% {
+			opacity: 0.5;
+		}
+		50% {
+			opacity: 1;
+		}
+		100% {
+			opacity: 0.5;
+		}
 	}
 
 	/* Responsive Design */
 	@media (max-width: 768px) {
-		.game-ui {
-			top: 10px;
-			left: 10px;
-			right: 10px;
-		}
-
-		.score-display, .lives-display {
-			font-size: 14px;
-			padding: 6px 12px;
-		}
-
 		.start-screen h1 {
 			font-size: 2.5rem;
 		}
@@ -711,4 +820,3 @@
 		}
 	}
 </style>
-
