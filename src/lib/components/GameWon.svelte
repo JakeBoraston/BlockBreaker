@@ -12,7 +12,7 @@
 		ball.velocity.y = GAME_CONFIG.ball.initialVelocity.y;
 	}}
 >
-	<h1>You won!</h1>
+	<h1>Congratulations, you won!</h1>
 	<p class="restart-hint">Click to play again</p>
 </button>
 
