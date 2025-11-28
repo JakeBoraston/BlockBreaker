@@ -38,8 +38,8 @@ export const GAME_CONFIG: GameConfig = {
         bottomOffset: 15
     },
     canvas: {
-        marginHorizontal: 10,
-        marginVertical: 35
+        marginHorizontal: 5,
+        marginVertical: 5
     },
     block: {
         height: 10,
