@@ -1,36 +1,14 @@
-<script lang="ts">;
+<script lang="ts">
 	import { onMount } from 'svelte';
-	let viewportWidth = $state(0);
-	let viewportHeight = $state(0);
-	const initialMinBallSpeed = 0;
-	const initialMaxBallSpeed = 7;
-
-	// Constants
-	const GAME_CONFIG = $state({
-		ball: {
-			size: 5,
-			initialVelocity: {
-				x: Math.random() * 5,
-				y: 1
-			},
-			initialPosition: { x: 10, y: 10 },
-			restitution: 0.8
-		},
-		paddle: {
-			width: 100,
-			height: 5,
-			bottomOffset: 15
-		},
-		canvas: {
-			marginHorizontal: 10,
-			marginVertical: 35
-		},
-		block: {
-			height:10,
-			width:30,
-			padding: 4
-		}
-	});
+	import type { Ball, Block, Particle, Star, NebulaCloud } from '$lib/types';
+	import { updatePhysics } from '$lib/physics';
+	import { checkBoundaryCollision, checkCircleRectCollision } from '$lib/collisions';
+	import { createParticles, updateParticles } from '$lib/particles';
+	import { GAME_CONFIG } from '$lib/constants';
+	import GameWon from '$lib/components/GameWon.svelte';
+	import GameOver from '$lib/components/GameOver.svelte';
+	let viewportWidth = $state(867);
+	let viewportHeight = $state(800);
 
 	let canvas;
 	let ctx;
@@ -40,7 +18,7 @@
 	let height = $derived(viewportHeight - GAME_CONFIG.canvas.marginVertical);
 
 	// Game entities
-	let ball = $state({
+	let ball:Ball = $state({
 		size: GAME_CONFIG.ball.size,
 		velocity: { ...GAME_CONFIG.ball.initialVelocity },
 		position: { ...GAME_CONFIG.ball.initialPosition },
@@ -52,6 +30,7 @@
 	let mouse = $state({ x: 0, y: 0 });
 	let gameStarted = $state(false);
 	let gameOver = $state(false);
+	let gameWon = $state(false);
 	let isShaking = $state(false);
 
 	// Particle system for effects
@@ -72,10 +51,14 @@
 		}
 	});
 
+	function getRandomInt(max) {
+		return Math.floor(Math.random() * max);
+	}
+
 	//block initialisation
 	function initialiseBlocks() {
-		const rows = 15;
-		const cols = 15;
+		const rows = GAME_CONFIG.block.rows;
+		const cols = GAME_CONFIG.block.cols;
 		const blockWidth = GAME_CONFIG.block.width;
 		const blockHeight = GAME_CONFIG.block.height;
 		const padding = GAME_CONFIG.block.padding;
@@ -86,7 +69,7 @@
 		for (let row = 0; row < rows; row++) {
 			for (let col = 0; col < cols; col++) {
 				//get block position
-				const isSpecialBlock = (Math.random() * 100) >= 2
+				const isSpecialBlock = getRandomInt(10) < 9;
 				const x = leftMargin + col * (blockWidth + padding);
 				const y = topMargin + row * (blockHeight + padding);
 				const block = {
@@ -94,7 +77,7 @@
 					width: blockWidth,
 					height: blockHeight,
 					isSpecial: isSpecialBlock,
-					color: isSpecialBlock ? '#4422ee': '#ff99dd',
+					color: isSpecialBlock ? '#4422ee' : '#ff99dd',
 					alive: true
 				};
 				blocks.push(block);
@@ -118,7 +101,7 @@
 		const newVelocity = -velocity * ball.restitution;
 		const correctedPosition = 2 * boundary - ballPos;
 		triggerScreenShake();
-		createParticles(ball.position.x, ball.position.y, '#ff3838', 8);
+		particles.push(...createParticles(ball.position, '#ff3838', 8));
 		return { velocity: newVelocity, position: correctedPosition };
 	}
 
@@ -129,33 +112,6 @@
 		}, 200);
 	}
 
-	// Particle system functions
-	function createParticles(x, y, color, count = 5) {
-		for (let i = 0; i < count; i++) {
-			particles.push({
-				x: x + (Math.random() - 0.5) * 4,
-				y: y + (Math.random() - 0.5) * 4,
-				vx: (Math.random() - 0.5) * 4,
-				vy: (Math.random() - 0.5) * 4,
-				life: 2.0,
-				decay: Math.random() * 0.05 + 0.01,
-				size: Math.random() * 2 + 1,
-				color: color
-			});
-		}
-	}
-
-	function updateParticles() {
-		particles = particles.filter((particle) => {
-			particle.x += particle.vx;
-			particle.y += particle.vy;
-			particle.life -= particle.decay;
-			particle.vx *= 0.99;
-			particle.vy *= 0.99;
-			return particle.life > 0;
-		});
-	}
-
 	function drawParticles() {
 		particles.forEach((particle) => {
 			ctx.save();
@@ -164,7 +120,7 @@
 			ctx.shadowBlur = 50;
 			ctx.fillStyle = particle.color;
 			ctx.beginPath();
-			ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+			ctx.arc(particle.position.x, particle.position.y, particle.size, 0, Math.PI * 2);
 			ctx.fill();
 			ctx.restore();
 		});
@@ -248,16 +204,35 @@
 		ctx.globalAlpha = 1;
 	}
 
-	function checkBoundaryCollision(position, size, min, max) {
-		return {
-			hitMin: position - size <= min,
-			hitMax: position + size >= max,
-			minBoundary: min + size,
-			maxBoundary: max - size
-		};
+	function softReset() {
+		console.log('softReset called - BEFORE changes');
+		console.log('gameOver before:', gameOver);
+		console.log('gameStarted before:', gameStarted);
+
+		// Reset ball position and velocity FIRST
+		ball.position.x = GAME_CONFIG.ball.initialPosition.x;
+		ball.position.y = GAME_CONFIG.ball.initialPosition.y;
+		ball.velocity.x = GAME_CONFIG.ball.initialVelocity.x;
+		ball.velocity.y = GAME_CONFIG.ball.initialVelocity.y;
+
+		// Clear particles to prevent any lingering effects
+		particles = [];
+
+		// THEN reset game state flags
+		gameOver = false;
+		gameStarted = false;
+		// Reset blocks
+		blocks = [];
+		initialiseBlocks();
+		console.log('gameOver after:', gameOver);
+		console.log('gameStarted after:', gameStarted);
+		console.log('softReset complete - AFTER changes');
 	}
 
+	$inspect(ball);
+
 	onMount(() => {
+		
 		viewportWidth = window.innerWidth;
 		viewportHeight = window.innerHeight;
 		ctx = canvas.getContext('2d');
@@ -450,6 +425,7 @@
 		}
 
 		function checkBounds() {
+			if (!gameStarted) return;
 			// Horizontal collision
 			const horizontal = checkBoundaryCollision(ball.position.x, ball.size, 0, width);
 			if (horizontal.hitMin) {
@@ -488,11 +464,12 @@
 			if (vertical.hitMax) {
 				// Game over when ball hits bottom
 				gameOver = true;
-				createParticles(ball.position.x, ball.position.y, '#ff0000', 15);
+				particles.push(...createParticles(ball.position, '#ff0000', 15));
 			}
 		}
 
 		function checkPaddle() {
+			if (!gameStarted) return;
 			const paddlePos = paddle.position();
 			const ballBottom = ball.position.y + ball.size;
 			const ballLeft = ball.position.x - ball.size;
@@ -506,53 +483,43 @@
 				const boundary = paddlePos.y - ball.size;
 				ball.position.y = 2 * boundary - ball.position.y;
 				triggerScreenShake();
-				createParticles(ball.position.x, paddlePos.y, '#4ecdc4', 12);
+				particles.push(...createParticles({ x: ball.position.x, y: paddlePos.y }, '#4ecdc4', 12));
 			}
-		}
-
-		function updatePhysics() {
-			// Update velocity from acceleration
-			ball.velocity.x += ball.acceleration.x;
-			ball.velocity.y += ball.acceleration.y;
-
-			// Update position from velocity
-			ball.position.x += ball.velocity.x;
-			ball.position.y += ball.velocity.y;
 		}
 
 		function checkBlockCollision() {
 			blocks.forEach((block) => {
 				if (block.alive) {
-					//find closest point
-					const closestX = Math.max(
-						block.position.x,
-						Math.min(ball.position.x, block.position.x + block.width)
-					);
-					const closestY = Math.max(
-						block.position.y,
-						Math.min(ball.position.y, block.position.y + block.height)
-					);
-					const distanceX = ball.position.x - closestX;
-					const distanceY = ball.position.y - closestY;
-					const distanceSquared = distanceX * distanceX + distanceY * distanceY;
+					const particleCount = block.isSpecial ? 5 : 100;
+					const collision = checkCircleRectCollision(ball, block);
 
-					if (distanceSquared < ball.size * ball.size) {
-						if (Math.abs(distanceX) > Math.abs(distanceY)) {
+					if (collision.isColliding) {
+						if (Math.abs(collision.distanceX) > Math.abs(collision.distanceY)) {
 							ball.velocity.x = -ball.velocity.x;
 						} else {
 							ball.velocity.y = -ball.velocity.y;
 						}
 						block.alive = false;
 						triggerScreenShake();
-						createParticles(closestX,closestY,block.color,5);
+						particles.push(
+							...createParticles(
+								{ x: collision.closestX, y: collision.closestY },
+								block.color,
+								particleCount
+							)
+						);
 					}
 				}
 			});
+			const allBlocksDestroyed = blocks.every((block) => !block.alive);
+			if (allBlocksDestroyed) {
+				gameWon = true;
+			}
 		}
 
 		function update() {
-			updatePhysics();
-			updateParticles();
+			updatePhysics(ball);
+			particles = updateParticles(particles);
 			checkBlockCollision();
 			checkPaddle();
 			checkBounds();
@@ -560,13 +527,12 @@
 		}
 
 		function animate() {
-			if (!gameOver) {
+			if (!gameOver && !gameWon && gameStarted) {
 				update();
 			}
 			draw();
 			requestAnimationFrame(animate);
 		}
-
 		animate();
 	});
 
@@ -602,20 +568,11 @@
 	{/if}
 
 	{#if gameOver}
-		<button
-			class="game-over"
-			onclick={() => {
-				gameOver = false;
-				gameStarted = false;
-				ball.position.x = GAME_CONFIG.ball.initialPosition.x;
-				ball.position.y = Math.random() * 500;
-				ball.velocity.x = GAME_CONFIG.ball.initialVelocity.x;
-				ball.velocity.y = GAME_CONFIG.ball.initialVelocity.y;
-			}}
-		>
-			<h1>Game Over</h1>
-			<p class="restart-hint">Click to restart</p>
-		</button>
+		<GameOver onRestart={softReset} />
+	{/if}
+
+	{#if gameWon}
+		<GameWon />
 	{/if}
 </div>
 
@@ -747,44 +704,6 @@
 		font-family: 'Courier New', monospace;
 		font-size: 1.2rem;
 		opacity: 0.8;
-	}
-
-	/* Game Over Screen */
-	.game-over {
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		transform: translate(-50%, -50%);
-		text-align: center;
-		color: white;
-		z-index: 20;
-		background: rgba(0, 0, 0, 0.9);
-		padding: 2rem;
-		border-radius: 20px;
-		border: 2px solid rgba(255, 0, 0, 0.5);
-		backdrop-filter: blur(20px);
-		cursor: pointer;
-		font-family: inherit;
-		transition: all 0.3s ease;
-	}
-
-	.game-over:hover {
-		background: rgba(0, 0, 0, 0.95);
-		border-color: rgba(255, 0, 0, 0.7);
-		transform: translate(-50%, -50%) scale(1.02);
-	}
-
-	.game-over h1 {
-		font-family: 'Courier New', monospace;
-		font-size: 3rem;
-		margin-bottom: 1rem;
-		color: #ff006e;
-		text-shadow: 0 0 20px rgba(255, 0, 110, 0.8);
-	}
-
-	.game-over p {
-		font-family: 'Courier New', monospace;
-		font-size: 1.5rem;
 	}
 
 	.restart-hint {
