@@ -44,6 +44,7 @@
 	// Space background elements
 	let stars = $state([]);
 	let nebulaClouds = $state([]);
+	const mobielPaddleYOffset = $derived(width < 400 ? 50 : 0);
 
 	let paddle = $derived({
 		width: GAME_CONFIG.paddle.width,
@@ -51,7 +52,7 @@
 		position: function () {
 			return {
 				x: Math.min(Math.max(mouse.x, 0), width - GAME_CONFIG.paddle.width),
-				y: height - GAME_CONFIG.paddle.height - GAME_CONFIG.paddle.bottomOffset
+				y: height - GAME_CONFIG.paddle.height - GAME_CONFIG.paddle.bottomOffset - mobielPaddleYOffset
 			};
 		}
 	});
