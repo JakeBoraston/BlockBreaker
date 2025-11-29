@@ -266,6 +266,32 @@
 		initialiseBlocks();
 	}
 
+	function handleInput(event: MouseEvent | TouchEvent){
+		event.preventDefault();
+
+		clientRect = canvas.getBoundingClientRect();
+
+		let clientX: number;
+		let clientY: number;
+
+		if('touches' in event && event.touches.length > 0){
+			clientX = event.touches[0].clientX;
+			clientY = event.touches[0].clientY;
+		} else if ('clientX' in event) {
+			clientX = event.clientX;
+			clientY = event.clientY;
+		} else {
+			return
+		}
+
+		mouse.x = clientX - clientRect.x
+		mouse.y = clientY - clientRect.y
+
+		if(!gameStarted){
+			gameStarted = true;
+		}
+	}
+
 	onMount(() => {
 		// Get the actual rendered canvas size (from CSS)
 		const rect = canvas.getBoundingClientRect();
@@ -626,7 +652,9 @@
 <div class="game-container w-full h-full p-2" class:shake={isShaking}>
 	<div class="background-glow"></div>
 	<canvas
-		onmousemove={handleMouse}
+		onmousemove={handleInput}
+		ontouchmove={handleInput}
+		ontouchstart={handleInput}
 		bind:this={canvas}
 		{width}
 		{height}
@@ -658,6 +686,8 @@
 	.game-container {
 		overflow: hidden;
 		background: radial-gradient(circle at 50% 50%, #1a1a2e 0%, #16213e 50%, #0f0f0f 100%);
+		touch-action: none;
+		overflow: hidden;
 	}
 
 	/* Canvas with Filters and Effects */
@@ -668,6 +698,9 @@
 			inset 0 0 20px rgba(0, 0, 0, 0.2);
 		border-radius: 4px;
 		transition: all 0.3s ease;
+		touch-action: none; 
+		-webkit-user-select:none;
+		user-select: none;
 	}
 
 	.game-canvas:hover {
