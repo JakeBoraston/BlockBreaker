@@ -18,14 +18,17 @@
 	let height = $derived(viewportHeight);
 
 	// Game entities
-	let ball: Ball = $state({
-		size: GAME_CONFIG.ball.size,
-		velocity: { ...GAME_CONFIG.ball.initialVelocity },
-		position: { ...GAME_CONFIG.ball.initialPosition },
-		acceleration: { x: 0, y: 0.2 },
-		restitution: GAME_CONFIG.ball.restitution
-	});
-	let ballHistory: Vector2D[] = $state([]);
+	let balls: Ball[] = $derived([
+		{
+			size: GAME_CONFIG.ball.size,
+			velocity: { x:Math.random() * 5, y:-10 },
+			position: { x: width/2,y: height/2 },
+			acceleration: { x: 0, y: 0 },
+			restitution: GAME_CONFIG.ball.restitution,
+			isLost: false,
+			history: []
+		}
+	]);
 	const MAX_HISTORY = 20;
 	let blocks = $state([]);
 	// Game state for UI
@@ -64,8 +67,8 @@
 		// const blockWidth = GAME_CONFIG.block.width;
 		const blockHeight = GAME_CONFIG.block.height;
 		const padding = GAME_CONFIG.block.padding;
-		const rowOffset = GAME_CONFIG.block.rowOffset
-		const blockWidth = Math.max(width / cols - padding,3)
+		const rowOffset = GAME_CONFIG.block.rowOffset;
+		const blockWidth = Math.max(width / cols - padding, 3);
 		const gridWidth = cols * (blockWidth + padding) - padding;
 		const leftMargin = (width - gridWidth) / 2;
 		const topMargin = 25;
@@ -73,17 +76,17 @@
 		for (let row = 0; row < rows; row++) {
 			for (let col = 0; col < cols; col++) {
 				//get block position
-				const isSpecialBlock = getRandomInt(10) < 9;
-				const isEvenRow = row % 2 === 0
+				const isSpecialBlock = getRandomInt(100) > 97;
+				const isEvenRow = row % 2 === 0;
 				const offSet = isEvenRow ? rowOffset : 0;
-				const x = leftMargin + col * (blockWidth + padding)+ offSet;
+				const x = leftMargin + col * (blockWidth + padding) + offSet;
 				const y = topMargin + row * (blockHeight + padding);
 				const block = {
 					position: { x: x, y: y },
 					width: blockWidth,
 					height: blockHeight,
 					isSpecial: isSpecialBlock,
-					color: isSpecialBlock ? '#4422ee' : '#ff99dd',
+					color: isSpecialBlock ? '#ffc72e' : '#4422ee',
 					alive: true
 				};
 				blocks.push(block);
@@ -103,11 +106,17 @@
 	}
 
 	// Helper functions for collision detection
-	function handleWallCollision(ballPos, ballSize, boundary, velocity) {
+	function handleWallCollision(
+		ball: Ball,
+		ballPos: number,
+		ballSize: number,
+		boundary: number,
+		velocity: number
+	) {
 		const newVelocity = -velocity * ball.restitution;
 		const correctedPosition = 2 * boundary - ballPos;
 		triggerScreenShake();
-		particles.push(...createParticles(ball.position, '#ff3838', 8));
+		particles.push(...createParticles(ball.position, '#ff3838', 5));
 		return { velocity: newVelocity, position: correctedPosition };
 	}
 
@@ -235,14 +244,20 @@
 
 	function softReset() {
 		// Reset ball position and velocity FIRST
-		ball.position.x = GAME_CONFIG.ball.initialPosition.x;
-		ball.position.y = GAME_CONFIG.ball.initialPosition.y;
-		ball.velocity.x = GAME_CONFIG.ball.initialVelocity.x;
-		ball.velocity.y = GAME_CONFIG.ball.initialVelocity.y;
+		balls = [
+			{
+			size: GAME_CONFIG.ball.size,
+			velocity: { x:Math.random() * 5, y:-10 },
+			position: { x: width/2,y: height/2 },
+			acceleration: { x: 0, y: 0 },
+			restitution: GAME_CONFIG.ball.restitution,
+			isLost: false,
+			history: []
+			}
+		];
 
 		// Clear particles to prevent any lingering effects
 		particles = [];
-		ballHistory = [];
 		// THEN reset game state flags
 		gameOver = false;
 		gameStarted = false;
@@ -283,100 +298,106 @@
 		}
 
 		function drawBallTrail() {
-			if (ballHistory.length < 2) return;
+			balls.forEach((ball) => {
+				if (ball.isLost) return;
+				if (ball.history.length < 2) return;
 
-			for (let i = 0; i < ballHistory.length - 1; i++) {
-				const progress = i / ballHistory.length;
-				const alpha = progress * 0.7;
+				for (let i = 0; i < ball.history.length - 1; i++) {
+					const progress = i / ball.history.length;
+					const alpha = progress * 0.7;
 
-				// Draw line segment connecting positions
-				ctx.save();
-				ctx.globalAlpha = alpha;
-				ctx.strokeStyle = '#ff6b6b';
-				ctx.lineWidth = ball.size * (0.3 + progress * 0.7) * 2;
-				ctx.lineCap = 'round';
-				ctx.shadowColor = '#ff3838';
-				ctx.shadowBlur = 15 * progress;
+					// Draw line segment connecting positions
+					ctx.save();
+					ctx.globalAlpha = alpha;
+					ctx.strokeStyle = '#ff6b6b';
+					ctx.lineWidth = ball.size * (0.3 + progress * 0.7) * 2;
+					ctx.lineCap = 'round';
+					ctx.shadowColor = '#ff3838';
+					ctx.shadowBlur = 15 * progress;
 
-				ctx.beginPath();
-				ctx.moveTo(ballHistory[i].x, ballHistory[i].y);
-				ctx.lineTo(ballHistory[i + 1].x, ballHistory[i + 1].y);
-				ctx.stroke();
-				ctx.restore();
-			}
+					ctx.beginPath();
+					ctx.moveTo(ball.history[i].x, ball.history[i].y);
+					ctx.lineTo(ball.history[i + 1].x, ball.history[i + 1].y);
+					ctx.stroke();
+					ctx.restore();
+				}
+			});
 		}
 
 		function drawBall() {
-			const x = ball.position.x;
-			const y = ball.position.y;
-			const radius = ball.size;
+			balls.forEach((ball) => {
+				if (ball.isLost) return;
+				const x = ball.position.x;
+				const y = ball.position.y;
+				const radius = ball.size;
 
-			// Create glowing ball with gradient
-			const gradient = ctx.createRadialGradient(
-				x - radius * 0.3,
-				y - radius * 0.3,
-				0,
-				x,
-				y,
-				radius * 1.5
-			);
-			gradient.addColorStop(0, '#ff6b6b');
-			gradient.addColorStop(0.3, '#ee5a52');
-			gradient.addColorStop(0.7, '#ff3838');
-			gradient.addColorStop(1, '#cc1e1e');
+				// Create glowing ball with gradient
+				const gradient = ctx.createRadialGradient(
+					x - radius * 0.3,
+					y - radius * 0.3,
+					0,
+					x,
+					y,
+					radius * 1.5
+				);
+				gradient.addColorStop(0, '#ff6b6b');
+				gradient.addColorStop(0.3, '#ee5a52');
+				gradient.addColorStop(0.7, '#ff3838');
+				gradient.addColorStop(1, '#cc1e1e');
 
-			// Outer glow
-			ctx.shadowColor = '#ff3838';
-			ctx.shadowBlur = 20;
-			ctx.shadowOffsetX = 0;
-			ctx.shadowOffsetY = 0;
+				// Outer glow
+				ctx.shadowColor = '#ff3838';
+				ctx.shadowBlur = 20;
+				ctx.shadowOffsetX = 0;
+				ctx.shadowOffsetY = 0;
 
-			ctx.beginPath();
-			ctx.arc(x, y, radius, 0, Math.PI * 2);
-			ctx.fillStyle = gradient;
-			ctx.fill();
-
-			// Add subtle texture lines
-			ctx.shadowBlur = 0;
-			ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-			ctx.lineWidth = 0.5;
-			for (let i = 0; i < 4; i++) {
-				const angle = (i / 4) * Math.PI * 2;
 				ctx.beginPath();
-				ctx.moveTo(x + Math.cos(angle) * radius * 0.3, y + Math.sin(angle) * radius * 0.3);
-				ctx.lineTo(x + Math.cos(angle) * radius * 0.8, y + Math.sin(angle) * radius * 0.8);
+				ctx.arc(x, y, radius, 0, Math.PI * 2);
+				ctx.fillStyle = gradient;
+				ctx.fill();
+
+				// Add subtle texture lines
+				ctx.shadowBlur = 0;
+				ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+				ctx.lineWidth = 0.5;
+				for (let i = 0; i < 4; i++) {
+					const angle = (i / 4) * Math.PI * 2;
+					ctx.beginPath();
+					ctx.moveTo(x + Math.cos(angle) * radius * 0.3, y + Math.sin(angle) * radius * 0.3);
+					ctx.lineTo(x + Math.cos(angle) * radius * 0.8, y + Math.sin(angle) * radius * 0.8);
+					ctx.stroke();
+				}
+
+				// Inner highlight (main)
+				const highlight = ctx.createRadialGradient(
+					x - radius * 0.4,
+					y - radius * 0.4,
+					0,
+					x - radius * 0.4,
+					y - radius * 0.4,
+					radius * 0.6
+				);
+				highlight.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+				highlight.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+				ctx.beginPath();
+				ctx.arc(x, y, radius, 0, Math.PI * 2);
+				ctx.fillStyle = highlight;
+				ctx.fill();
+
+				// Small specular highlight
+				ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+				ctx.beginPath();
+				ctx.arc(x - radius * 0.3, y - radius * 0.3, radius * 0.2, 0, Math.PI * 2);
+				ctx.fill();
+
+				// Outer rim for definition
+				ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+				ctx.lineWidth = 1;
+				ctx.beginPath();
+				ctx.arc(x, y, radius, 0, Math.PI * 2);
 				ctx.stroke();
-			}
-
-			// Inner highlight (main)
-			const highlight = ctx.createRadialGradient(
-				x - radius * 0.4,
-				y - radius * 0.4,
-				0,
-				x - radius * 0.4,
-				y - radius * 0.4,
-				radius * 0.6
-			);
-			highlight.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
-			highlight.addColorStop(1, 'rgba(255, 255, 255, 0)');
-
-			ctx.beginPath();
-			ctx.arc(x, y, radius, 0, Math.PI * 2);
-			ctx.fillStyle = highlight;
-			ctx.fill();
-
-			// Small specular highlight
-			ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-			ctx.beginPath();
-			ctx.arc(x - radius * 0.3, y - radius * 0.3, radius * 0.2, 0, Math.PI * 2);
-			ctx.fill();
-
-			// Outer rim for definition
-			ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
-			ctx.lineWidth = 1;
-			ctx.beginPath();
-			ctx.arc(x, y, radius, 0, Math.PI * 2);
-			ctx.stroke();
+			});
 		}
 
 		function drawPaddle() {
@@ -436,90 +457,120 @@
 
 		function checkBounds() {
 			if (!gameStarted) return;
-			// Horizontal collision
-			const horizontal = checkBoundaryCollision(ball.position.x, ball.size, 0, width);
-			if (horizontal.hitMin) {
-				const result = handleWallCollision(
-					ball.position.x,
-					ball.size,
-					horizontal.minBoundary,
-					ball.velocity.x
-				);
-				ball.velocity.x = result.velocity;
-				ball.position.x = result.position;
-			}
-			if (horizontal.hitMax) {
-				const result = handleWallCollision(
-					ball.position.x,
-					ball.size,
-					horizontal.maxBoundary,
-					ball.velocity.x
-				);
-				ball.velocity.x = result.velocity;
-				ball.position.x = result.position;
-			}
+			balls.forEach((ball) => {
+				//we don't need to check bounds of lost balls
+				if (ball.isLost) return;
+				// Horizontal collision
+				const horizontal = checkBoundaryCollision(ball.position.x, ball.size, 0, width);
+				if (horizontal.hitMin) {
+					const result = handleWallCollision(
+						ball,
+						ball.position.x,
+						ball.size,
+						horizontal.minBoundary,
+						ball.velocity.x
+					);
+					ball.velocity.x = result.velocity;
+					ball.position.x = result.position;
+				}
+				if (horizontal.hitMax) {
+					const result = handleWallCollision(
+						ball,
+						ball.position.x,
+						ball.size,
+						horizontal.maxBoundary,
+						ball.velocity.x
+					);
+					ball.velocity.x = result.velocity;
+					ball.position.x = result.position;
+				}
 
-			// Vertical collision
-			const vertical = checkBoundaryCollision(ball.position.y, ball.size, 0, height);
-			if (vertical.hitMin) {
-				const result = handleWallCollision(
-					ball.position.y,
-					ball.size,
-					vertical.minBoundary,
-					ball.velocity.y
-				);
-				ball.velocity.y = result.velocity;
-				ball.position.y = result.position;
-			}
-			if (vertical.hitMax) {
-				// Game over when ball hits bottom
+				// Vertical collision
+				const vertical = checkBoundaryCollision(ball.position.y, ball.size, 0, height);
+				if (vertical.hitMin) {
+					const result = handleWallCollision(
+						ball,
+						ball.position.y,
+						ball.size,
+						vertical.minBoundary,
+						ball.velocity.y
+					);
+					ball.velocity.y = result.velocity;
+					ball.position.y = result.position;
+				}
+				if (vertical.hitMax) {
+					//mark ball as lost
+					ball.isLost = true;
+					particles.push(...createParticles(ball.position, '#ff0000', 5));
+				}
+			});
+			const allBallsLost = balls.every((ball) => ball.isLost);
+			if (allBallsLost) {
 				gameOver = true;
-				particles.push(...createParticles(ball.position, '#ff0000', 15));
 			}
 		}
 
 		function checkPaddle() {
 			if (!gameStarted) return;
-			const paddlePos = paddle.position();
-			const ballBottom = ball.position.y + ball.size;
-			const ballLeft = ball.position.x - ball.size;
-			const ballRight = ball.position.x + ball.size;
+			balls.forEach((ball) => {
+				if (ball.isLost) return;
+				const paddlePos = paddle.position();
+				const ballBottom = ball.position.y + ball.size;
+				const ballLeft = ball.position.x - ball.size;
+				const ballRight = ball.position.x + ball.size;
 
-			const verticalContact = ballBottom >= paddlePos.y + paddle.height;
-			const horizontalContact = ballRight >= paddlePos.x && ballLeft <= paddlePos.x + paddle.width;
+				const verticalContact = ballBottom >= paddlePos.y + paddle.height;
+				const horizontalContact =
+					ballRight >= paddlePos.x && ballLeft <= paddlePos.x + paddle.width;
 
-			if (verticalContact && horizontalContact) {
-				ball.velocity.y = -ball.velocity.y;
-				const boundary = paddlePos.y - ball.size;
-				ball.position.y = 2 * boundary - ball.position.y;
-				triggerScreenShake();
-				particles.push(...createParticles({ x: ball.position.x, y: paddlePos.y }, '#4ecdc4', 12));
-			}
+				if (verticalContact && horizontalContact) {
+					ball.velocity.y = -ball.velocity.y;
+					const boundary = paddlePos.y - ball.size;
+					ball.position.y = 2 * boundary - ball.position.y;
+					triggerScreenShake();
+					particles.push(...createParticles({ x: ball.position.x, y: paddlePos.y }, '#4ecdc4', 5
+					));
+				}
+			});
 		}
 
 		function checkBlockCollision() {
-			blocks.forEach((block) => {
-				if (block.alive) {
-					const particleCount = block.isSpecial ? 5 : 100;
-					const collision = checkCircleRectCollision(ball, block);
+			balls.forEach((ball) => {
+				if (ball.isLost) return;
+				blocks.forEach((block) => {
+					if (block.alive) {
+						const particleCount = block.isSpecial ? 1 : 50;
+						const collision = checkCircleRectCollision(ball, block);
 
-					if (collision.isColliding) {
-						if (Math.abs(collision.distanceX) > Math.abs(collision.distanceY)) {
-							ball.velocity.x = -ball.velocity.x;
-						} else {
-							ball.velocity.y = -ball.velocity.y;
+						if (collision.isColliding) {
+							if (Math.abs(collision.distanceX) > Math.abs(collision.distanceY)) {
+								ball.velocity.x = -ball.velocity.x;
+							} else {
+								ball.velocity.y = -ball.velocity.y;
+							}
+							block.alive = false;
+							triggerScreenShake();
+							particles.push(
+								...createParticles(
+									{ x: collision.closestX, y: collision.closestY },
+									block.color,
+									particleCount
+								)
+							);
+							if (block.isSpecial) {
+								balls.push({
+									size: GAME_CONFIG.ball.size,
+									velocity: { x: Math.random() * 10, y: ball.velocity.x },
+									position: { x: collision.closestX, y: collision.closestY },
+									acceleration: { x: 0, y: 0 },
+									restitution: GAME_CONFIG.ball.restitution,
+									isLost: false,
+									history: []
+								});
+							}
 						}
-						block.alive = false;
-						triggerScreenShake();
-						particles.push(
-							...createParticles(
-								{ x: collision.closestX, y: collision.closestY },
-								block.color,
-								particleCount
-							)
-						);
 					}
-				}
+				});
 			});
 			const allBlocksDestroyed = blocks.every((block) => !block.alive);
 			if (allBlocksDestroyed) {
@@ -528,14 +579,17 @@
 		}
 
 		function update() {
-			updatePhysics(ball);
+			balls.forEach((ball) => {
+				updatePhysics(ball);
+			});
 			particles = updateParticles(particles);
 			//Ball Trail updates
-			ballHistory.push({ x: ball.position.x, y: ball.position.y });
-			if (ballHistory.length > MAX_HISTORY) {
-				ballHistory.shift();
-			}
-			//
+			balls.forEach((ball) => {
+				ball.history.push({ x: ball.position.x, y: ball.position.y });
+				if (ball.history.length > MAX_HISTORY) {
+					ball.history.shift();
+				}
+			});
 			checkBlockCollision();
 			checkPaddle();
 			checkBounds();
@@ -571,7 +625,12 @@
 
 <div class="game-container w-full h-full p-2" class:shake={isShaking}>
 	<div class="background-glow"></div>
-	<canvas onmousemove={handleMouse} bind:this={canvas} {width} {height} class="game-canvas w-full h-full"
+	<canvas
+		onmousemove={handleMouse}
+		bind:this={canvas}
+		{width}
+		{height}
+		class="game-canvas w-full h-full"
 	></canvas>
 
 	{#if !gameStarted}
@@ -714,7 +773,6 @@
 		font-size: 1.2rem;
 		opacity: 0.8;
 	}
-
 
 	@keyframes pulse {
 		0% {

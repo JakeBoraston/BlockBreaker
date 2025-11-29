@@ -3,8 +3,6 @@ import type { Vector2D } from "./types"
 export interface GameConfig {
     ball: {
         size: number,
-        initialVelocity: Vector2D,
-        initialPosition: Vector2D,
         restitution: number;
     },
     paddle: {
@@ -25,8 +23,6 @@ export interface GameConfig {
 export const GAME_CONFIG: GameConfig = {
     ball: {
         size: 5,
-        initialVelocity: { x: Math.random()*10, y: -1 },
-        initialPosition: { x: 10, y: 10},
         restitution: 0.8
     },
     paddle: {
