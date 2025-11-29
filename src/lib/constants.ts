@@ -35,7 +35,7 @@ export const GAME_CONFIG: GameConfig = {
         width: 20,
         padding: 15,
         rows: 10,
-        cols: 20,
-        rowOffset: 15
+        cols: 10,
+        rowOffset: 5
     }
 }

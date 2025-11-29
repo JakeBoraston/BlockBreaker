@@ -655,33 +655,9 @@
 </div>
 
 <style>
-	/* Game Container with Background Effects */
 	.game-container {
 		overflow: hidden;
 		background: radial-gradient(circle at 50% 50%, #1a1a2e 0%, #16213e 50%, #0f0f0f 100%);
-	}
-
-	/* Animated Background Glow */
-	.background-glow {
-		position: absolute;
-		top: -50%;
-		left: -50%;
-		width: 200%;
-		height: 200%;
-		background:
-			radial-gradient(circle at 25% 25%, rgba(255, 0, 150, 0.1) 0%, transparent 50%),
-			radial-gradient(circle at 75% 75%, rgba(0, 150, 255, 0.1) 0%, transparent 50%);
-		animation: float 8s ease-in-out infinite alternate;
-		z-index: -1;
-	}
-
-	@keyframes float {
-		0% {
-			transform: rotate(0deg) scale(1);
-		}
-		100% {
-			transform: rotate(360deg) scale(1.1);
-		}
 	}
 
 	/* Canvas with Filters and Effects */
