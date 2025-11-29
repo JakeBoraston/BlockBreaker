@@ -8,6 +8,7 @@
 <svelte:head>
 	<link rel="icon" href={favicon} />
 </svelte:head>
-
-{@render children()}
+<div class="w-svw h-svh m-0 p-0 bg-red-500 flex flex-1">
+	{@render children()}
+</div>
 

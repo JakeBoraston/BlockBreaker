@@ -12,16 +12,13 @@ export interface GameConfig {
         height: number,
         bottomOffset: number;
     };
-    canvas: {
-        marginHorizontal: number,
-        marginVertical: number
-    }
     block: {
         height: number,
         width: number,
         padding: number,
         rows: number,
-        cols: number
+        cols: number,
+        rowOffset: number
     }
 }
 
@@ -37,15 +34,12 @@ export const GAME_CONFIG: GameConfig = {
         height: 5,
         bottomOffset: 15
     },
-    canvas: {
-        marginHorizontal: 5,
-        marginVertical: 5
-    },
     block: {
         height: 10,
         width: 20,
         padding: 15,
         rows: 10,
-        cols: 30
+        cols: 20,
+        rowOffset: 15
     }
 }

@@ -14,8 +14,8 @@
 	let ctx;
 	let clientRect = $state();
 
-	let width = $derived(viewportWidth - GAME_CONFIG.canvas.marginHorizontal);
-	let height = $derived(viewportHeight - GAME_CONFIG.canvas.marginVertical);
+	let width = $derived(viewportWidth);
+	let height = $derived(viewportHeight);
 
 	// Game entities
 	let ball: Ball = $state({
@@ -61,9 +61,11 @@
 	function initialiseBlocks() {
 		const rows = GAME_CONFIG.block.rows;
 		const cols = GAME_CONFIG.block.cols;
-		const blockWidth = GAME_CONFIG.block.width;
+		// const blockWidth = GAME_CONFIG.block.width;
 		const blockHeight = GAME_CONFIG.block.height;
 		const padding = GAME_CONFIG.block.padding;
+		const rowOffset = GAME_CONFIG.block.rowOffset
+		const blockWidth = Math.max(width / cols - padding,3)
 		const gridWidth = cols * (blockWidth + padding) - padding;
 		const leftMargin = (width - gridWidth) / 2;
 		const topMargin = 25;
@@ -72,7 +74,9 @@
 			for (let col = 0; col < cols; col++) {
 				//get block position
 				const isSpecialBlock = getRandomInt(10) < 9;
-				const x = leftMargin + col * (blockWidth + padding);
+				const isEvenRow = row % 2 === 0
+				const offSet = isEvenRow ? rowOffset : 0;
+				const x = leftMargin + col * (blockWidth + padding)+ offSet;
 				const y = topMargin + row * (blockHeight + padding);
 				const block = {
 					position: { x: x, y: y },
@@ -248,10 +252,13 @@
 	}
 
 	onMount(() => {
-		viewportWidth = window.innerWidth;
-		viewportHeight = window.innerHeight;
+		// Get the actual rendered canvas size (from CSS)
+		const rect = canvas.getBoundingClientRect();
+		viewportWidth = rect.width;
+		viewportHeight = rect.height;
+
 		ctx = canvas.getContext('2d');
-		clientRect = canvas.getBoundingClientRect();
+		clientRect = rect;
 		initialiseBlocks();
 		// Initialize space background
 		initializeSpaceBackground();
@@ -547,8 +554,11 @@
 
 	$effect(() => {
 		function updateDimensions() {
-			viewportWidth = window.innerWidth;
-			viewportHeight = window.innerHeight;
+			if (canvas) {
+				const rect = canvas.getBoundingClientRect();
+				viewportWidth = rect.width;
+				viewportHeight = rect.height;
+			}
 		}
 
 		updateDimensions();
@@ -559,9 +569,9 @@
 	});
 </script>
 
-<div class="game-container" class:shake={isShaking}>
+<div class="game-container w-full h-full p-2" class:shake={isShaking}>
 	<div class="background-glow"></div>
-	<canvas onmousemove={handleMouse} bind:this={canvas} {width} {height} class="game-canvas"
+	<canvas onmousemove={handleMouse} bind:this={canvas} {width} {height} class="game-canvas w-full h-full"
 	></canvas>
 
 	{#if !gameStarted}
@@ -588,9 +598,6 @@
 <style>
 	/* Game Container with Background Effects */
 	.game-container {
-		position: relative;
-		width: 100vw;
-		height: 100vh;
 		overflow: hidden;
 		background: radial-gradient(circle at 50% 50%, #1a1a2e 0%, #16213e 50%, #0f0f0f 100%);
 	}
@@ -620,17 +627,11 @@
 
 	/* Canvas with Filters and Effects */
 	.game-canvas {
-		display: block;
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		transform: translate(-50%, -50%);
 		filter: brightness(1.2) contrast(1.2) saturate(1.3);
 		box-shadow:
 			0 0 50px rgba(255, 255, 255, 0.1),
 			inset 0 0 20px rgba(0, 0, 0, 0.2);
 		border-radius: 4px;
-		cursor: none;
 		transition: all 0.3s ease;
 	}
 
@@ -699,7 +700,6 @@
 	.start-screen h1 {
 		font-family: 'Courier New', monospace;
 		font-size: 4rem;
-		margin-bottom: 1rem;
 		text-shadow:
 			0 0 20px rgba(255, 255, 255, 0.8),
 			0 0 40px rgba(0, 150, 255, 0.6);
