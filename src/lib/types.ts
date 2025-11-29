@@ -8,7 +8,9 @@ export interface Ball {
     velocity: Vector2D,
     acceleration: Vector2D,
     size: number,
-    restitution: number
+    restitution: number,
+    isLost: boolean,
+    history: Vector2D[];
 }
 
 export interface Block {

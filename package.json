@@ -10,7 +10,7 @@
 		"prepare": "svelte-kit sync || echo ''",
 		"format": "prettier --write .",
 		"lint": "prettier --check . && eslint .",
-		"deploy": "npm run build && npx gh-pages -d build -t true" 
+		"deploy": "npm run build && npx gh-pages -d build -t true"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^1.4.0",
@@ -28,5 +28,9 @@
 		"prettier-plugin-svelte": "^3.4.0",
 		"svelte": "^5.43.8",
 		"vite": "^7.2.2"
+	},
+	"dependencies": {
+		"@tailwindcss/vite": "^4.1.17",
+		"tailwindcss": "^4.1.17"
 	}
 }
